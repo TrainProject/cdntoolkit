@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>基础监控快速入口</title>
+    <style>
+        .autoSearchText{
+            border:solid 1px #CFCFCF;
+            height:20px;
+            color:black;
+        }
+        .menu_v{
+            margin:0;
+            padding:0;
+            line-height:20px;
+            font-size:12px;
+            list-style-type:none;
+        }
+        .menu_v li{
+            margin:0;
+            padding:0;
+            line-height:20px;
+            font-size:14px;
+            list-style-type:none;
+            float:none;
+        }
+        .menu_v li span{
+            color:Red;
+        }
+        .autoSearchItem{
+            border:solid 1px #CFCFCF;
+            visibility:hidden;
+            position:absolute;
+            background-color:white;
+            overflow-y:auto;
+        }
+
+        .tb{
+            text-align: center;
+            border-width:2px;
+            border-collapse:collapse;
+            border-color:black;
+            border-style:solid;
+        }
+        .tr{
+            height:100px;
+        }
+        td{
+            border-width:2px;
+            border-collapse:collapse;
+            border-color:black;
+            border-style:solid;
+        }
+        .operation{
+            background:dodgerblue;
+        }
+        .operation:hover{
+            background:deepskyblue;
+        }
+        .opretionClicked{
+            background:darkblue;
+        }
+        .slugUrl:hover{
+            background: goldenrod;
+        }
+        .opList{
+            border:solid 1px #CFCFCF;
+            visibility: hidden;
+            position:absolute;
+            background-color:white;
+        }
+        .pageControl{
+            color:goldenrod;
+        }
+        .pageNum{
+            float:right;
+        }
+        #contain::after{
+            content: "";
+            height: 0;
+            visibility: hidden;
+        }
+    </style>
+</head>
+<body>
+    <form id="form1" runat="server">
+        <div>
+            <input id="metric_nameSearch" type="text" placeholder="请输入metric_name"/>
+            <input id="tags_nameSearch" type="text" placeholder="请输入tags_name">
+            <select id="sel_aggregation"  class="span2 m-wrap"; data-placeholder="请选择聚合参数">
+                <option value="">请选择聚合方式</option>
+                <option value="sum">sum</option>
+                <option value="mean">avg</option>
+                <option value="median">mid</option>
+                <option value="max">max</option>
+                <option value="min">min</option>
+            </select>
+            <select id="group_by"  class="span2 m-wrap"; data-placeholder="请选择分类条件">
+                <option value="">请选择分类条件</option>
+                <option value="country">country</option>
+                <option value="province">province</option>
+                <option value="area">area</option>
+                <option value="isp">isp</option>
+                <option value="idc">idc</option>
+                <option value="role">role</option>
+            </select>
+
+
+            <input type="button" id="showGrafana" value="查看">
+            <!--<input type="button" id="button2" value="定制">-->
+        </div>
+    </form>
+    <br />
+    <br />
+    <div id="contain">
+        <table id="grafanaTable" width="100%" border="2" cellpadding="0" cellspacing="0" class="tb">
+            <thead>
+                <tr>
+                    <th id="operations">合并查看</th>
+                    <th>metric</th>
+                    <th>tags</th>
+                    <th>slug</th>
+                    <th>updateTime</th>
+                    <th>createTime</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+        <div class="pageNum"></div>
+    </div>
+</body>
+    <script src="../static/js/jquery-3.1.1.min.js"></script>
+<script>
+    $(document).ready(function() {
+
+        var page_num = 1;
+        //页面加载完成后自动生成表格
+        initTable(1);
+
+        //给合并查看绑定点击事件
+        $(document).on("click","#operations",function () {
+            var arr = [];
+            $(".warning .operation").each(function (e) {
+                arr.push($(this).attr("id"));
+            });
+            arr = arr.toString();
+            $.ajax({
+                type:"GET",
+                url:"http://127.0.0.1:9005/CocatGrafana.do",
+                data:{code:arr},
+                async:false,
+                jsonp: "callback",
+                dataType:"jsonp",
+                jsonpCallback:"jsonpCallback",
+                cache: false,
+                success:function (ack) {
+                    window.open(ack.code);
+                },
+                error:function (re) {
+                    console.log(re);
+                }
+            });
+        });
+
+        //初始化表格函数
+        function initTable(page) {
+            $.ajax({
+                type:"GET",
+                url:"http://127.0.0.1:9005/QueryTable.do",
+                data:{page_num:page},
+                async:false,
+                jsonp: "callback",
+                dataType:"jsonp",
+                jsonpCallback:"jsonpCallback",
+                cache: false,
+                success:function (ack) {
+                    if(page < 1){
+                        page_num = 1;
+                    }
+                    if(page_num >= Math.ceil(ack.count/20)){
+                        page_num = Math.ceil(ack.count/20);
+                    }
+                    //加载数据列表和页脚
+                    for(var count=0;count<ack.code.length;count++){
+                        $("table tbody").append("<tr><td class='operation' id='" + ack.code[count].slug + "'>操作</td><td>" + ack.code[count].metric_name + "</td><td>" + ack.code[count].tags + "</td><td class='slugUrl'>" + ack.code[count].slug + "</td><td>" + ack.code[count].updated + "</td><td>" + ack.code[count].created + "</td></tr>");
+                    }
+                    $(".pageNum").html("<span id='lastPage' class='pageControl'>上一页</span> <span id='nextPage' class='pageControl'>下一页</span> 当前第" + page_num + "页，共" + Math.ceil(ack.count/20) + "页。");
+
+                    //为slug各项添加点击弹出新页面事件
+                    $("table").off().on("click",".slugUrl",function () {
+                        $.ajax({
+                            type:"GET",
+                            url:"http://127.0.0.1:9005/QueryQuickGrafana.do",
+                            data:{slug:$(this).text()},
+                            async:false,
+                            jsonp:"callback",
+                            dataType:"jsonp",
+                            jsonpCallback:"jsonpCallback",
+                            cache:false,
+                            success:function (ack) {
+                                window.open(ack.code);
+                            }
+                        });
+                    });
+
+                    //为表头添加复选框
+                    initTableCheckbox();
+
+                    //给操作添加功能列表
+                    $("#grafanaTable").on("click",".operation",function (e) {
+                        $(this).off();
+                        $(".opList").remove();
+                        var id = $(this).attr("id");
+                        // = id;
+                        var position = $(this).position();
+                        if($('#' + id + 'List')){
+                            $('#' + id + 'List').remove();
+                        }
+                        var opList = '<div id=' + id + 'List' + ' class="opList"><ul class="menu_v"></ul></div>';
+                        $(this).append(opList);
+                        var itemIndex = 0;
+                        /*显示选择框*/
+                        $('#' + id + 'List').css({ 'visibility': 'visible', 'left': position.left, 'top': position.top + 24 });
+
+                        //动态生成列表标签
+                        initItem($(this), ["查看JSON","删除"]);
+
+                        //添加查看JSON和删除事件
+                        $("#operationList1").on("click",function () {
+                            var slug = $(this).parent().parent().parent().attr("id");
+                            $.ajax({
+                                type: "GET",
+                                url: "http://127.0.0.1:9005/ViewGraphDetail.do",
+                                data: {slug: slug},
+                                async: false,
+                                jsonp: "callback",
+                                dataType: "jsonp",
+                                jsonpCallback: "jsonpCallback",
+                                cache: false,
+                                success: function (ack) {
+                                    alert(JSON.stringify(ack.code));
+                                    //window.open(JSON.stringify(ack.code));
+                                },
+                                error: function (re) {
+                                    console.log(re);
+                                }
+                            });
+                        });
+                        $("#operationList2").on("click",function () {
+                            var flag = confirm("是否删除该项数据？");
+                            if(flag == true){
+                                var slug = $(this).parent().parent().parent().attr("id");
+                                $.ajax({
+                                    type: "GET",
+                                    url: "http://127.0.0.1:9005/DeleteBySlug.do",
+                                    data: {slug: slug},
+                                    async: false,
+                                    jsonp: "callback",
+                                    dataType: "jsonp",
+                                    jsonpCallback: "jsonpCallback",
+                                    cache: false,
+                                    success: function (ack) {
+                                        $("table tbody").html("");
+                                        initTable(1);
+                                    },
+                                    error: function (re) {
+                                        console.log(re);
+                                    }
+                                });
+                            }
+                        });
+
+                        /*初始化下拉框数据,鼠标移过每项时，改变背景色并且将项的值赋值给输入框*/
+                        function initItem(obj, data) {
+                            var str = "";
+                            for (var i = 1; i <= data.length; i++) {
+                                str += "<li id='operationList" + i + "'><font>" + data[i - 1] + "</font>&nbsp</li>";
+                            }
+                            $('#' + id + ' ul').html(str);
+                            /*点击项时将执行相应操作*/
+                            $('li').each(function() {
+                                $(this).bind('click', function() {
+                                    //$("#metric_nameSearch").val($(this).find('font').text());
+                                    $('#' + id + 'List').css('visibility', 'hidden');
+                                });
+                            });
+                            /*鼠标划过每项时改变背景色*/
+                            $('li').each(function() {
+                                $(this).hover(
+                                        function() {
+                                            $('li:nth-child(' + itemIndex + ')').css({ 'background': 'white', 'color': 'black' });
+                                            itemIndex = $('li').index($(this)[0]) + 1;
+                                            $(this).css({ 'background': 'blue', 'color': 'white' });
+                                        },
+                                        function() {
+                                            $(this).css({ 'background': 'white', 'color': 'black' });
+                                        }
+                                );
+                            });
+
+                            /*点击空白处隐藏下拉框*/
+                            $(document).click(function(e) {
+                                if(e.target.getAttribute("class") != "operation"){
+                                    //$('.opList').css('visibility', 'hidden');
+                                    //$("#"+$(".operationClicked").attr("id")).removeClass("o")
+                                    $('.opList').remove();
+                                }
+                            });
+                        };
+
+                    });
+                },
+                error:function (error) {
+                    console.log(error);
+                }
+            });
+
+            /*点击空白处隐藏下拉框*/
+            $(document).click(function(e) {
+                //if(e.target.attribute("class") != "autoSearchItem"){
+                    //$('.autoSearchText').css('visibility', 'hidden');
+                    $('.autoSearchItem').remove();
+                //}
+            });
+        }
+
+        //添加页脚操作
+        $(".pageNum").on("click","#lastPage",function (e) {
+            page_num = page_num - 1;
+            $("table tbody").html("");
+            initTable(page_num);
+        });
+        $(".pageNum").on("click","#nextPage",function (e) {
+            page_num = page_num + 1;
+            $("table tbody").html("");
+            initTable(page_num);
+        });
+
+        /*加载实时metric_name搜索数据*/
+        $("#metric_nameSearch").off().on("keyup",function(e) {
+            var position = $(this).position();
+            var arrData = new Array();
+            if (1) {
+                $.ajax({
+                    type:"GET",
+                    url:"http://127.0.0.1:9005/QueryMetricName.do",
+                    data:{metric_name:this.value},
+                    async:false,
+                    jsonp: "callback",
+                    dataType:"jsonp",
+                    jsonpCallback:"jsonpCallback",
+                    cache: false,
+                    success: function(data) {
+                        //for循环取值
+                        for (var i = 0; i < data.code.length; i++) {
+                            arrData.push(data.code[i]);
+                        }
+                        var itemIndex = 0;
+                        if($('#metric_nameSearchItem')){
+                            $('#metric_nameSearchItem').remove();
+                        }
+                        var autoSearchItem = '<div id="metric_nameSearchItem" class="autoSearchItem"><ul class="menu_v"></ul></div>';
+                        $("#metric_nameSearch").after(autoSearchItem);
+
+                        /*显示下拉框*/
+                        $('#metric_nameSearchItem').css({ 'visibility': 'visible', 'left': position.left, 'top': position.top + 24 });
+
+                        initItem($(this), arrData);
+                        //var itemCount = $('li').length;
+
+
+                        /*初始化下拉框数据,鼠标移过每项时，改变背景色并且将项的值赋值给输入框*/
+                        function initItem(obj, data) {
+                            var str = "";
+                            if (data.length == 0) {
+                                $('#metric_nameSearchItem ul').html('<div style="text-align:center;color:red;">无符合数据<div>');
+
+                            }
+                            else {
+                                for (var i = 1; i <= data.length; i++) {
+                                    str += "<li><span>" + i + "/" + data.length + "</span>\r<font>" + data[i - 1] + "</font>&nbsp</li>";
+                                }
+                                $('#metric_nameSearchItem ul').html(str);
+                            }
+                            /*点击项时将值赋值给搜索文本框*/
+                            $('li').each(function() {
+                                $(this).bind('click', function() {
+                                    $("#metric_nameSearch").val($(this).find('font').text());
+                                    $('#metric_nameSearchItem').css('visibility', 'hidden');
+                                    $("#tags_nameSearch").focus();
+                                });
+                            });
+                            /*鼠标划过每项时改变背景色*/
+                            $('li').each(function() {
+                                $(this).hover(
+                                        function() {
+                                            $('li:nth-child(' + itemIndex + ')').css({ 'background': 'white', 'color': 'black' });
+                                            itemIndex = $('li').index($(this)[0]) + 1;
+                                            $(this).css({ 'background': 'blue', 'color': 'white' });
+                                            //$('#metric_nameSearch').val($('li:nth-child(' + itemIndex + ')').find('font').text());
+                                        },
+                                        function() {
+                                            $(this).css({ 'background': 'white', 'color': 'black' });
+                                        }
+                                );
+                            });
+
+                        };
+                    },
+                    Error: function(err) {
+                        alert(err);
+                    }
+                });
+            }
+        });
+
+
+        //实时加载tags_name搜索数据
+        $("#tags_nameSearch").off().on("keyup",function(e) {
+            var position = $(this).position();
+            var arrData = new Array();
+            if (1) {
+                $.ajax({
+                    type:"GET",
+                    url:"http://127.0.0.1:9005/QueryTagName.do",
+                    data:{metric_name:$('#metric_nameSearch').val(),tags_name:this.value},
+                    async:false,
+                    jsonp:"callback",
+                    dataType:"jsonp",
+                    jsonpCallback:"jsonpCallback",
+                    cache: false,
+                    success: function(data) {
+                        //for循环取值
+                        for (var i = 0; i < data.code.length; i++) {
+                            arrData.push(data.code[i]);
+                        }
+
+                        var itemIndex = 0;
+                        if($('#tags_nameSearchItem')){
+                            $('#tags_nameSearchItem').remove();
+                        }
+                        var autoSearchItem = '<div id="tags_nameSearchItem" class="autoSearchItem"><ul class="menu_v"></ul></div>';
+                        $("#tags_nameSearch").after(autoSearchItem);
+
+                        /*显示下拉框*/
+                        $('#tags_nameSearchItem').css({ 'visibility': 'visible', 'left': position.left, 'top': position.top + 24 });
+                        initItem($(this), arrData);
+                        //var itemCount = $('li').length;
+
+
+                        /*初始化下拉框数据,鼠标移过每项时，改变背景色并且将项的值赋值给输入框*/
+                        function initItem(obj, data) {
+                            var str = "";
+                            if (data.length == 0) {
+                                $('#tags_nameSearchItem ul').html('<div style="text-align:center;color:red;">无符合数据<div>');
+
+                            }
+                            else {
+                                for (var i = 1; i <= data.length; i++) {
+                                    str += "<li><span>" + i + "/" + data.length + "</span>\r<font>" + data[i - 1] + "</font>&nbsp</li>";
+                                }
+                                $('#tags_nameSearchItem ul').html(str);
+                            }
+                            /*点击项时将值赋值给搜索文本框*/
+                            $('li').each(function() {
+                                $(this).bind('click', function() {
+                                    var tagsName = $("#tags_nameSearch").val();
+                                    var index = tagsName.lastIndexOf(",");
+                                    if(tagsName[tagsName.length-1] == "="){
+                                        $("#tags_nameSearch").val(tagsName + $(this).find('font').text());
+                                        $('#tags_nameSearchItem').css('visibility', 'hidden');
+                                        $("#tags_nameSearch").focus();
+                                    }else if(index == -1){
+                                        $("#tags_nameSearch").val($(this).find('font').text());
+                                        $('#tags_nameSearchItem').css('visibility', 'hidden');
+                                        $("#tags_nameSearch").focus();
+                                    }else{
+                                        var str = tagsName.slice(0,index+1);
+                                        $("#tags_nameSearch").val(str + $(this).find('font').text());
+                                        $('#tags_nameSearchItem').css('visibility', 'hidden');
+                                        $("#tags_nameSearch").focus();
+                                    }
+                                });
+                            });
+                            /*鼠标划过每项时改变背景色*/
+                            $('li').each(function() {
+                                $(this).hover(
+                                        function() {
+                                            $('li:nth-child(' + itemIndex + ')').css({ 'background': 'white', 'color': 'black' });
+                                            itemIndex = $('li').index($(this)[0]) + 1;
+                                            $(this).css({ 'background': 'blue', 'color': 'white' });
+                                            //$("#tags_nameSearch").val($('li:nth-child(' + itemIndex + ')').find('font').text());
+                                        },
+                                        function() {
+                                            $(this).css({ 'background': 'white', 'color': 'black' });
+                                        }
+                                );
+                            });
+                        };
+                    },
+                    Error: function(err) {
+                        alert(err);
+                    }
+                });
+            }
+            /*点击空白处隐藏下拉框*/
+            $(document).click(function() {
+                //$('.autoSearchItem').css('visibility', 'hidden');
+                $('.autoSearchItem').remove();
+            });
+        });
+
+        //点击查看按钮实现页面加载grafana前两个参数对应的url
+        var grafanaFlag = true;
+        $("#showGrafana").click(function (e) {
+            $.ajax({
+                type:"GET",
+                url:"http://127.0.0.1:9005/QueryGrafana.do",
+                data:{metric_name:$("#metric_nameSearch").val(),tags_name:$("#tags_nameSearch").val(),aggregate:$("#sel_aggregation").val(),group:$("#group_by").val()},
+                jsonp:"callback",
+                dataType:"jsonp",
+                jsonpCallback:"jsonpCallback",
+                cache:false,
+                success:function (ack) {
+                    //在原窗口底部打开链接
+//                    if(grafanaFlag){
+//                        var newFrame = document.createElement("iframe");
+//                        newFrame.id = "newFrame";
+//                        newFrame.width = "100%";
+//                        newFrame.height = "700px";
+//                        newFrame.src = ack.code;
+//                        document.body.appendChild(newFrame);
+//                        grafanaFlag = false;
+//                    }else{
+//                        $("#newFrame").src = ack.code;
+//                    }
+                    //在新窗口中打开链接
+                    if(ack.code !== ""){
+                        window.open(ack.code);
+                        $("table tbody").html("");
+                        initTable(1);
+                    }
+                },
+                error:function (re) {
+                    console.log(re.code);
+                }
+            });
+        })
+    });
+
+
+    //添加复选框函数
+    function initTableCheckbox() {
+        var $thr = $('table thead tr');
+        var $checkAllTh = $('<th id="inited"><input type="checkbox" id="checkAll" name="checkAll" /></th>');
+        /*将全选/反选复选框添加到表头最前，即增加一列*/
+        if( $('table thead tr :first').attr("id") != "inited"){
+            $thr.prepend($checkAllTh);
+        }
+        var $tbr = $('table tbody tr');
+        var $checkItemTd = $('<td><input type="checkbox" name="checkItem" /></td>');
+        /*每一行都在最前面插入一个选中复选框的单元格*/
+        $tbr.prepend($checkItemTd);
+        /*点击每一行的选中复选框时*/
+        $tbr.find('input').click(function(event){
+            /*调整选中行的CSS样式*/
+            $(this).parent().parent().toggleClass('warning');
+            /*如果已经被选中行的行数等于表格的数据行数，将全选框设为选中状态，否则设为未选中状态*/
+            $checkAll.prop('checked',$tbr.find('input:checked').length == $tbr.length ? true : false);
+            /*阻止向上冒泡，以防再次触发点击操作*/
+            event.stopPropagation();
+        });
+        /*点击每一行时也触发该行的选中操作*/
+        //$tbr.click(function(){
+        $("table tbody tr").on("click",":first",function () {
+            $(this).find('input').click();
+        });
+        /*“全选/反选”复选框*/
+        var $checkAll = $thr.find('input');
+        $checkAll.click(function(event){
+            /*将所有行的选中状态设成全选框的选中状态*/
+            $tbr.find('input').prop('checked',$(this).prop('checked'));
+            /*并调整所有选中行的CSS样式*/
+            if ($(this).prop('checked')) {
+                $tbr.find('input').parent().parent().addClass('warning');
+            } else{
+                $tbr.find('input').parent().parent().removeClass('warning');
+            }
+            /*阻止向上冒泡，以防再次触发点击操作*/
+            event.stopPropagation();
+        });
+        /*点击全选框所在单元格时也触发全选框的点击操作*/
+        $checkAllTh.click(function(){
+            $(this).find('input').click();
+        });
+    }
+</script>
+    <script>
+        //获取搜索文本框数据
+        $("#searchTextOne").on("keyup",function (e) {
+            if(this.value != ""){
+                $.ajax({
+                    url:"http://127.0.0.1:9005/QueryMetricName.do",
+                    data:{metric_name:this.value},
+                    type:"GET",
+                    jsonp: "callback",
+                    dataType:"jsonp",
+                    jsonpCallback:"jsonpCallback",
+                    success:function(ack) {
+                        var arr = ack.code;
+                    },
+                    error:function(result) {
+                        console.log(result);
+                    }
+                });
+            }
+        });
+    </script>
+</html>
